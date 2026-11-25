@@ -28,13 +28,14 @@ export async function diagnosticar(): Promise<string[]> {
   if (url && key) {
     try {
       const db = createClient(url, key, { auth: { persistSession: false } });
-      const { error } = await db.from("usuarios").select("id", { head: true, count: "exact" });
+      const { error, status } = await db.from("usuarios").select("id").limit(1);
       if (error) {
-        if (error.code === "PGRST205" || error.code === "42P01" || /usuarios/.test(error.message))
-          problemas.push("O banco ainda não tem as tabelas do SISCOF: rode o arquivo supabase/schema.sql no SQL Editor do Supabase.");
-        else if (/JWT|Invalid API key|apikey|Unauthorized|permission/i.test(error.message))
-          problemas.push("SUPABASE_SERVICE_ROLE_KEY inválida: copie a chave service_role (secret) em Project Settings → API Keys.");
-        else problemas.push(`Erro ao acessar o banco: ${error.message}`);
+        const m = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`;
+        if (status === 404 || /PGRST205|PGRST202|42P01|does not exist|schema cache|Could not find/i.test(m))
+          problemas.push("O banco ainda não tem as tabelas do SISCOF: rode o arquivo supabase/schema.sql no SQL Editor do Supabase (no mesmo projeto desta URL).");
+        else if (status === 401 || status === 403 || /42501|permission denied|JWT|Invalid API key|apikey|Unauthorized/i.test(m))
+          problemas.push("A chave em SUPABASE_SERVICE_ROLE_KEY não tem permissão: use a secret (sb_secret_...) ou a service_role, do MESMO projeto da URL.");
+        else problemas.push(`Erro ao acessar o banco (HTTP ${status}): ${m.trim() || "sem detalhes"}`);
       }
     } catch {
       problemas.push("Não foi possível conectar ao Supabase: confira a SUPABASE_URL e se o projeto está ativo (não pausado).");
