@@ -54,11 +54,25 @@ async function primeiroAcesso(login: string, senha: string): Promise<boolean> {
 }
 
 export async function entrar(_: EstadoLogin, fd: FormData): Promise<EstadoLogin> {
+  let r: EstadoLogin | "ok";
+  try {
+    r = await tentarEntrar(fd);
+  } catch (e) {
+    console.error("[login]", e);
+    const msg = e instanceof Error ? e.message : "";
+    if (/SUPABASE|SESSION_SECRET/.test(msg)) return { erro: `Configuração do servidor: ${msg}` };
+    return { erro: "Não foi possível conectar ao banco de dados. Verifique a configuração do Supabase." };
+  }
+  if (r === "ok") redirect("/");
+  return r;
+}
+
+async function tentarEntrar(fd: FormData): Promise<EstadoLogin | "ok"> {
   const login = String(fd.get("login") ?? "").trim().toLowerCase();
   const senha = String(fd.get("senha") ?? "");
   if (!login || !senha) return { erro: "Informe usuário e senha." };
 
-  if (await primeiroAcesso(login, senha)) redirect("/");
+  if (await primeiroAcesso(login, senha)) return "ok";
 
   const { data: u } = await db()
     .from("usuarios")
@@ -98,7 +112,7 @@ export async function entrar(_: EstadoLogin, fd: FormData): Promise<EstadoLogin>
     .update({ falhas_login: 0, bloqueado_ate: null, ultimo_acesso: new Date().toISOString() })
     .eq("id", u.id);
   await abrirSessao(u.id, u.sessao_versao);
-  redirect("/");
+  return "ok";
 }
 
 export async function sair() {
