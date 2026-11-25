@@ -1,13 +1,14 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { normalizarSupabaseUrl } from "./supabase-url";
 
 let cliente: SupabaseClient | null = null;
 
 /** Cliente Supabase do servidor (service_role). Nunca importe em componentes "use client". */
 export function db(): SupabaseClient {
   if (cliente) return cliente;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = normalizarSupabaseUrl(process.env.SUPABASE_URL);
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().replace(/^["'`]+|["'`]+$/g, "");
   if (!url || !key) {
     throw new Error("Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nas variáveis de ambiente.");
   }
