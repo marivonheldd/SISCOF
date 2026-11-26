@@ -25,7 +25,30 @@ export async function diagnosticar(): Promise<string[]> {
   else if (secret.length < 32) problemas.push("SESSION_SECRET muito curto: use pelo menos 32 caracteres.");
   if (!process.env.APP_PASSWORD) problemas.push("Variável APP_PASSWORD não cadastrada (necessária no primeiro acesso do ADM).");
 
-  if (url && key) {
+  // Chave legacy (JWT): confere o papel e o projeto sem acessar a rede
+  let chaveOk = true;
+  if (url && key && key.startsWith("eyJ")) {
+    try {
+      const b64 = key.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const dados = JSON.parse(Buffer.from(b64, "base64").toString("utf8")) as { role?: string; ref?: string };
+      const refUrl = url.match(/^https:\/\/([a-z0-9]+)\.supabase\./)?.[1];
+      if (dados.role && dados.role !== "service_role") {
+        chaveOk = false;
+        problemas.push(
+          `A chave colada em SUPABASE_SERVICE_ROLE_KEY é a "${dados.role}" (pública). Troque pela da linha "service_role" (secret) em Project Settings → API Keys → Legacy API keys, ou use uma "sb_secret_...".`,
+        );
+      } else if (dados.ref && refUrl && dados.ref !== refUrl) {
+        chaveOk = false;
+        problemas.push(
+          `A chave é de OUTRO projeto do Supabase (${dados.ref}), mas a URL é do projeto ${refUrl}. Use URL e chave do mesmo projeto.`,
+        );
+      }
+    } catch {
+      /* chave em outro formato: segue para o teste de conexão */
+    }
+  }
+
+  if (url && key && chaveOk) {
     try {
       const db = createClient(url, key, { auth: { persistSession: false } });
       const { error, status } = await db.from("usuarios").select("id").limit(1);
