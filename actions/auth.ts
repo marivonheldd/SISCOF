@@ -26,31 +26,41 @@ async function abrirSessao(uid: string, versao: number) {
 /**
  * Primeiro acesso: enquanto não existir nenhum administrador, o login ADMIN_LOGIN (padrão "admin")
  * com a senha APP_PASSWORD cria a conta ADM. Depois disso, a APP_PASSWORD não é mais usada.
+ * Retorna "ok" (conta criada e sessão aberta), "nao" (não se aplica) ou uma mensagem de erro.
  */
-async function primeiroAcesso(login: string, senha: string): Promise<boolean> {
-  const loginAdm = (process.env.ADMIN_LOGIN || "admin").toLowerCase();
-  const senhaInicial = process.env.APP_PASSWORD;
-  if (login !== loginAdm || !senhaInicial) return false;
+async function primeiroAcesso(login: string, senha: string): Promise<"ok" | "nao" | { erro: string }> {
+  const loginAdm = (process.env.ADMIN_LOGIN || "admin").trim().toLowerCase();
+  const senhaInicial = process.env.APP_PASSWORD?.trim();
 
-  const { count } = await db().from("usuarios").select("id", { count: "exact", head: true }).eq("perfil", "admin");
-  if ((count ?? 0) > 0) return false;
-  if (!(await textoConfere(senha, senhaInicial))) return false;
+  const { count, error: e1 } = await db()
+    .from("usuarios")
+    .select("id", { count: "exact", head: true })
+    .eq("perfil", "admin");
+  if (e1) return { erro: "Não foi possível acessar o banco de dados. Veja os avisos acima do formulário de login." };
+  if ((count ?? 0) > 0) return "nao";
+
+  // Ainda não há ADM: orienta em vez de dizer só "senha incorreta"
+  if (!senhaInicial) return { erro: "Primeiro acesso: a variável APP_PASSWORD não está cadastrada na Vercel." };
+  if (login !== loginAdm)
+    return { erro: `Primeiro acesso: ainda não existe nenhuma conta. Entre com o usuário "${loginAdm}" para criar a conta ADM.` };
+  if (!(await textoConfere(senha.trim(), senhaInicial)))
+    return { erro: "Primeiro acesso: a senha não confere com a APP_PASSWORD cadastrada na Vercel (atenção a maiúsculas e minúsculas)." };
 
   const { data, error } = await db()
     .from("usuarios")
     .insert({
       nome: "Administrador",
       login: loginAdm,
-      senha_hash: await gerarHash(senha),
+      senha_hash: await gerarHash(senhaInicial),
       perfil: "admin",
       trocar_senha: false,
       ultimo_acesso: new Date().toISOString(),
     })
     .select("id, sessao_versao")
     .single();
-  if (error || !data) return false;
+  if (error || !data) return { erro: `Não foi possível criar a conta ADM: ${error?.message ?? "erro desconhecido"}` };
   await abrirSessao(data.id, data.sessao_versao);
-  return true;
+  return "ok";
 }
 
 export async function entrar(_: EstadoLogin, fd: FormData): Promise<EstadoLogin> {
@@ -72,7 +82,9 @@ async function tentarEntrar(fd: FormData): Promise<EstadoLogin | "ok"> {
   const senha = String(fd.get("senha") ?? "");
   if (!login || !senha) return { erro: "Informe usuário e senha." };
 
-  if (await primeiroAcesso(login, senha)) return "ok";
+  const pa = await primeiroAcesso(login, senha);
+  if (pa === "ok") return "ok";
+  if (pa !== "nao") return pa;
 
   const { data: u } = await db()
     .from("usuarios")
