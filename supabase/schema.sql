@@ -387,5 +387,12 @@ revoke all on v_estoque_produto, v_lotes, v_movimentacoes, v_movimentos_mensais,
   from anon, authenticated;
 revoke execute on function registrar_entradas(date, text, text, text, text, jsonb, date) from public, anon, authenticated;
 revoke execute on function registrar_saida(uuid, numeric, date, text, tipo_refeicao, text, text, text, date) from public, anon, authenticated;
+-- Permissões explícitas para a chave secreta (service_role). Projetos novos do
+-- Supabase podem não conceder isso automaticamente.
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant execute on functions to service_role;
 grant execute on function registrar_entradas(date, text, text, text, text, jsonb, date) to service_role;
 grant execute on function registrar_saida(uuid, numeric, date, text, tipo_refeicao, text, text, text, date) to service_role;

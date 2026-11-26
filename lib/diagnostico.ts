@@ -57,7 +57,11 @@ export async function diagnosticar(): Promise<string[]> {
         if (status === 404 || /PGRST205|PGRST202|42P01|does not exist|schema cache|Could not find/i.test(m))
           problemas.push("O banco ainda não tem as tabelas do SISCOF: rode o arquivo supabase/schema.sql no SQL Editor do Supabase (no mesmo projeto desta URL).");
         else if (status === 401 || status === 403 || /42501|permission denied|JWT|Invalid API key|apikey|Unauthorized/i.test(m))
-          problemas.push("A chave em SUPABASE_SERVICE_ROLE_KEY não tem permissão: use a secret (sb_secret_...) ou a service_role, do MESMO projeto da URL.");
+          problemas.push(
+            /42501|permission denied/i.test(m)
+              ? "A chave foi aceita, mas o banco negou acesso às tabelas: rode no SQL Editor os comandos GRANT para service_role (final do supabase/schema.sql). Detalhe: " + m.trim()
+              : `A chave em SUPABASE_SERVICE_ROLE_KEY foi recusada (HTTP ${status}): use a secret (sb_secret_...) ou a service_role do MESMO projeto da URL e faça Redeploy. Detalhe: ${m.trim() || "sem detalhes"}`,
+          );
         else problemas.push(`Erro ao acessar o banco (HTTP ${status}): ${m.trim() || "sem detalhes"}`);
       }
     } catch {
