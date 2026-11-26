@@ -8,6 +8,10 @@ export function normalizarSupabaseUrl(bruta?: string | null): string | null {
   const s = bruta.trim().replace(/^["'`]+|["'`]+$/g, "").trim();
   if (!s) return null;
 
+  // Supabase local (supabase start): http://127.0.0.1:54321
+  const local = s.match(/^(https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?)\/?/i);
+  if (local) return local[1];
+
   const painel = s.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{15,30})/i);
   if (painel) return `https://${painel[1].toLowerCase()}.supabase.co`;
 

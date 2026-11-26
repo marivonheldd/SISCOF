@@ -81,7 +81,7 @@ type Mov = {
   responsavel: string;
 };
 
-async function todosLotesComSaldo(): Promise<Lote[]> {
+async function todosLotesComSaldo(): Promise<{ data: Lote[]; error: { message: string } | null }> {
   const out: Lote[] = [];
   for (let de = 0; ; de += 1000) {
     const { data, error } = await db()
@@ -90,11 +90,15 @@ async function todosLotesComSaldo(): Promise<Lote[]> {
       .gt("saldo", 0)
       .order("data_validade")
       .range(de, de + 999);
-    if (error) throw new Error(error.message);
+    if (error) return { data: out, error };
     out.push(...((data ?? []) as Lote[]));
-    if (!data || data.length < 1000) return out;
+    if (!data || data.length < 1000) return { data: out, error: null };
   }
 }
+
+type Erro = { message?: string; code?: string; details?: string | null; hint?: string | null } | null;
+const descreve = (nome: string, e: Erro) =>
+  e ? `${nome}: ${[e.code, e.message, e.details, e.hint].filter(Boolean).join(" · ") || "erro sem detalhes"}` : null;
 
 export default async function Painel({ searchParams }: { searchParams: Promise<{ sem_permissao?: string }> }) {
   const semPermissao = (await searchParams).sem_permissao === "1";
@@ -103,7 +107,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   const mesAtual = inicioDoMes(dataHoje);
   const seisMeses = inicioDoMes(dataHoje, 5);
 
-  const [{ data: produtos }, lotes, { data: mensais }, { data: consumo }, { data: ultimas }] = await Promise.all([
+  const [rProd, rLotes, rMens, rCons, rUlt] = await Promise.all([
     d.from("v_estoque_produto").select("id, nome, unidade, ativo, saldo"),
     todosLotesComSaldo(),
     d.from("v_movimentos_mensais").select("*").gte("mes", seisMeses),
@@ -114,6 +118,15 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
       .order("criado_em", { ascending: false })
       .limit(10),
   ]);
+  const errosBanco = [
+    descreve("v_estoque_produto", rProd.error),
+    descreve("v_lotes", rLotes.error),
+    descreve("v_movimentos_mensais", rMens.error),
+    descreve("v_consumo_categoria", rCons.error),
+    descreve("v_movimentacoes", rUlt.error),
+  ].filter(Boolean) as string[];
+  if (errosBanco.length) console.error("[painel]", errosBanco);
+  const produtos = rProd.data, lotes = rLotes.data, mensais = rMens.data, consumo = rCons.data, ultimas = rUlt.data;
 
   const prods = (produtos ?? []) as { id: string; nome: string; unidade: Unidade; ativo: boolean; saldo: number }[];
   const mens = (mensais ?? []) as { mes: string; tipo: string; unidade: Unidade; total: number; registros: number }[];
@@ -167,6 +180,20 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
       <AutoRefresh segundos={60} />
       <PageHeader titulo="Painel" descricao={`Situação da câmara frigorífica em ${fmtData(dataHoje)}. Atualização automática a cada minuto.`} />
 
+      {errosBanco.length > 0 && (
+        <div className="mb-4">
+          <Alerta tom="vermelho" titulo="O banco recusou algumas consultas do painel">
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 font-mono text-xs">
+              {errosBanco.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              Geralmente se resolve rodando de novo o <b>supabase/schema.sql</b> completo no SQL Editor (ele não apaga dados).
+            </p>
+          </Alerta>
+        </div>
+      )}
       {semPermissao && (
         <div className="mb-4">
           <Alerta tom="vermelho">Seu perfil não tem permissão para acessar aquela página.</Alerta>
