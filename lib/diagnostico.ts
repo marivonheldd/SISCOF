@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { normalizarSupabaseUrl } from "./supabase-url";
+import { fusoValido } from "./format";
 
 /**
  * Verifica a configuração do servidor e a conexão com o banco.
@@ -23,6 +24,8 @@ export async function diagnosticar(): Promise<string[]> {
     problemas.push("SUPABASE_SERVICE_ROLE_KEY errada: use a chave service_role (eyJ...) ou a secret (sb_secret_...), não a publishable/anon nem a URL.");
   if (!secret) problemas.push("Variável SESSION_SECRET não cadastrada na Vercel.");
   else if (secret.length < 32) problemas.push("SESSION_SECRET muito curto: use pelo menos 32 caracteres.");
+  if (process.env.APP_TIMEZONE && !fusoValido(process.env.APP_TIMEZONE))
+    problemas.push(`APP_TIMEZONE inválida ("${process.env.APP_TIMEZONE}"): use exatamente America/Cuiaba. Enquanto isso o sistema usa America/Cuiaba.`);
   if (!process.env.APP_PASSWORD) problemas.push("Variável APP_PASSWORD não cadastrada (necessária no primeiro acesso do ADM).");
 
   // Chave legacy (JWT): confere o papel e o projeto sem acessar a rede

@@ -100,7 +100,7 @@ type Erro = { message?: string; code?: string; details?: string | null; hint?: s
 const descreve = (nome: string, e: Erro) =>
   e ? `${nome}: ${[e.code, e.message, e.details, e.hint].filter(Boolean).join(" · ") || "erro sem detalhes"}` : null;
 
-export default async function Painel({ searchParams }: { searchParams: Promise<{ sem_permissao?: string }> }) {
+async function PainelConteudo({ searchParams }: { searchParams: Promise<{ sem_permissao?: string }> }) {
   const semPermissao = (await searchParams).sem_permissao === "1";
   const d = db();
   const dataHoje = hoje();
@@ -321,4 +321,26 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
       </Card>
     </>
   );
+}
+
+export default async function Painel(props: { searchParams: Promise<{ sem_permissao?: string }> }) {
+  try {
+    return await PainelConteudo(props);
+  } catch (e) {
+    const err = e as Error & { digest?: string };
+    // Redirecionamentos do Next (ex.: sessão expirada) não são erros
+    if (typeof err?.digest === "string" && err.digest.startsWith("NEXT_")) throw e;
+    console.error("[painel]", e);
+    return (
+      <>
+        <PageHeader titulo="Painel" />
+        <Alerta tom="vermelho" titulo="Erro ao montar o painel">
+          <p className="font-mono text-xs">
+            {err?.name}: {err?.message}
+          </p>
+          <p className="mt-2">Envie este texto para o suporte. As demais páginas do menu continuam funcionando.</p>
+        </Alerta>
+      </>
+    );
+  }
 }

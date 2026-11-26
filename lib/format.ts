@@ -1,6 +1,18 @@
 // Utilitários compartilhados (cliente e servidor)
 
-export const TZ = process.env.APP_TIMEZONE || "America/Cuiaba";
+/** Fuso do sistema. Valor inválido em APP_TIMEZONE (espaço, aspas, erro de digitação) cai no padrão. */
+export const TZ_PADRAO = "America/Cuiaba";
+export function fusoValido(tz?: string | null): string | null {
+  const t = (tz ?? "").trim().replace(/^["'`]+|["'`]+$/g, "");
+  if (!t) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: t });
+    return t;
+  } catch {
+    return null;
+  }
+}
+export const TZ = fusoValido(process.env.APP_TIMEZONE) ?? TZ_PADRAO;
 
 /** Lotes que vencem em até N dias são "próximos do vencimento". */
 export const DIAS_ALERTA_VENCIMENTO = 7;
